@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>フルーツマージゲーム</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        体 {
+            マージン: 0;
+            オーバーフロー: 非表示;
+            背景色: #fef3c7;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            タッチアクション：操作；
+        }
+        キャンバス {
+            表示: ブロック;
+            マージン: 0 自動;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            背景色: #fff9db;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen">
+    <div class="absolute top-4 left-4 z-10 bg-white/80 p-4 rounded-xl shadow-md border border-orange-100">
+        <h1 class="text-2xl font-bold text-orange-600">スイカゲーム風</h1>
+        <p class="text-gray-600 font-bold">スコア: <span id="score">0</span></p>
+    </div>
+    <div id="game-over" class="hidden absolute inset-0 bg-black/60 z-20 flex flex-col items-center justify-center text-white p-8">
+        <h2 class="text-5xl font-extrabold mb-4 text-orange-400">ゲームオーバー</h2>
+        <p class="text-2xl mb-8">最終スコア: <span id="final-score">0</span></p>
+        <button onclick="location.reload()" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-8 rounded-full text-xl transition-transform active:scale-95 shadow-lg">
+            もう一度遊んでいます
+        </button>
+    </div>
+    <div id="game-container" class="relative">
+        <!-- 次のフルーツプレビュー（デスクトップ版） -->
+        <div class="absolute -right-28 top-0 bg-white/90 p-4 rounded-2xl shadow-md hidden md:block border border-orange-100">
+            <p class="text-xs font-bold text-center text-orange-400 mb-2 uppercase tracking-widest">次へ</p>
+            <div id="next-preview" class="w-16 h-16 flex items-center justify-center text-4xl select-none"></div>
+        </div>
+    </div>
+    <script>
+        const { Engine, Render, Runner, Bodies, Composite, Events, Body } = Matter;
+        //  - - 構成  - -
+        const WIDTH = 400;
+        const HEIGHT = 600;
+        // 柿(🟠)をメロン(🍈)系のイラストに変更しました
+        const FRUITS = [
+            { name: "チェリー", radius: 15, score: 2, color: "#ff4d4d", emoji: "🍒" },
+            { 名前: "イチゴ", 半径: 22, スコア: 4, 色: "#ff85a2", 絵文字: "🍓" },
+            { name: "ブドウ", radius: 30, score: 6, color: "#a29bfe", emoji: "🍇" },
+            { 名前: "デコポン", 半径: 38, スコア: 10, 色: "#ffbe76", 絵文字: "🍊" },
+            { name: "Small Melon", radius: 48, スコア: 15, color: "#c0e57c", emoji: "🍈" }, // 柿をメロンに変更
+            { name: "Apple", radius: 58, score: 20, color: "#eb4d4b", emoji: "🍎" },
+            { name: "Pear", radius: 68, score: 28, color: "#f9ca24", emoji: "🍐" },
+            { name: "ピーチ", radius: 80, score: 36, color: "#ffbe76", emoji: "🍑" },
+            { name: "パイナップル", radius: 95, score: 45, color: "#f1c40f", emoji: "🍍" },
+            { 名前: "ビッグメロン", 半径: 110, スコア: 55, 色: "#badc58", 絵文字: "🍈" },
+            { 名前: "スイカ", 半径: 130, スコア: 66, 色: "#6ab04c", 絵文字: "🍉" }
+        ];
+        スコアを0とする。
+        let isGameOver = false;
+        canDrop = true を引数にとります。
+        let nextFruitIndex = 0;
+        // --- 初期化 ---
+        const engine = Engine.create();
+        const render = Render.create({
+            要素: document.getElementById('game-container')
+            エンジン: エンジン、
+            オプション: {
+                幅: 幅、
+                高さ: 高さ、
+                ワイヤーフレーム: false、
+                背景: '#fff9db'
+            }
+        });
+        // 壁
+        const wallOptions = {
+            isStatic: true、
+            render: { fillStyle: '#e67e22' },
+            摩擦：0.5
+        };
+        const ground = Bodies.rectangle(WIDTH / 2, HEIGHT + 10, WIDTH, 40, wallOptions);
+        const leftWall = Bodies.rectangle(-10, HEIGHT / 2, 20, HEIGHT, wallOptions);
+        const rightWall = Bodies.rectangle(WIDTH + 10, HEIGHT / 2, 20, HEIGHT, wallOptions);
+        
+        // 締め切りライン
+        const deadline = Bodies.rectangle(WIDTH / 2, 80, WIDTH, 2, {
+            isStatic: true、
+            isSensor: true、
+            render: { fillStyle: 'rgba(255, 0, 0, 0.1)' }
+        });
+        Composite.add(engine.world, [ground, leftWall, rightWall, deadline]);
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+        // --- ゲームロジック ---
+        function updateNextPreview() {
+            // ドロップされるのは最初の5種類（チェリー〜メロン(小)まで）
+            nextFruitIndex = Math.floor(Math.random() * 5);
+            const preview = document.getElementById('next-preview');
+            preview.innerText = FRUITS[nextFruitIndex].emoji;
+        }
+        updateNextPreview();
+        function createFruit(x, y, index) {
+            const fruit = FRUITS[index];
+            const body = Bodies.circle(x, y, fruit.radius, {
+                インデックス: インデックス、
+                賠償金: 0.3、
+                摩擦: 0.1、
+                与える： {
+                    fillStyle: fruit.color,
+                }
+            });
+            body.render.text = fruit.emoji;
+            本体を返す。
+        }
+        // 絵文字を描くためのカスタムレンダラー
+        Events.on(render, 'afterRender', () => {
+            const ctx = render.context;
+            const bodies = Composite.allBodies(engine.world);
+            bodies.forEach(body => {
+                if (body.render && body.render.text) {
+                    const { x, y } = body.position;
+                    const fruit = FRUITS[body.index];
